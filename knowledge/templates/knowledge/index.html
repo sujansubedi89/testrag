@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>DocMind — Ask your documents</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0D0F14;
+    --surface: #13161E;
+    --surface2: #1A1E2A;
+    --surface3: #222736;
+    --border: #2A2F3E;
+    --border2: #353B4F;
+    --accent: #6366F1;
+    --accent-dim: #4F52C4;
+    --accent-glow: rgba(99,102,241,0.15);
+    --green: #10B981;
+    --green-dim: rgba(16,185,129,0.12);
+    --red: #EF4444;
+    --red-dim: rgba(239,68,68,0.12);
+    --amber: #F59E0B;
+    --text: #E8EAF0;
+    --text2: #9BA3B8;
+    --text3: #5A6070;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Inter', sans-serif;
+    --radius: 10px;
+    --radius-sm: 6px;
+  }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Top bar ── */
+  .topbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 20px;
+    height: 52px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+  }
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    font-size: 15px;
+    letter-spacing: -0.3px;
+  }
+  .logo-icon {
+    width: 28px; height: 28px;
+    background: var(--accent);
+    border-radius: 7px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+  }
+  .topbar-right {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .status-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 6px var(--green);
+  }
+  .status-label { font-size: 12px; color: var(--text2); }
+
+  /* ── Layout ── */
+  .app {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* ── Left sidebar ── */
+  .sidebar {
+    width: 260px;
+    flex-shrink: 0;
+    border-right: 1px solid var(--border);
+    background: var(--surface);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .sidebar-section {
+    padding: 14px 14px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    color: var(--text3);
+    text-transform: uppercase;
+  }
+  .upload-zone {
+    margin: 0 12px 12px;
+    border: 1.5px dashed var(--border2);
+    border-radius: var(--radius);
+    padding: 18px 12px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: var(--surface2);
+  }
+  .upload-zone:hover, .upload-zone.drag { border-color: var(--accent); background: var(--accent-glow); }
+  .upload-zone .icon { font-size: 22px; margin-bottom: 6px; }
+  .upload-zone p { font-size: 12px; color: var(--text2); line-height: 1.5; }
+  .upload-zone p strong { color: var(--accent); font-weight: 500; }
+  .upload-zone input { display: none; }
+
+  .upload-btn {
+    margin: 0 12px 14px;
+    padding: 9px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    width: calc(100% - 24px);
+    transition: background 0.15s;
+    font-family: var(--sans);
+    display: none;
+  }
+  .upload-btn:hover { background: var(--accent-dim); }
+  .upload-btn.visible { display: block; }
+  .upload-btn.loading { opacity: 0.7; pointer-events: none; }
+
+  .doc-list { flex: 1; overflow-y: auto; padding: 0 8px 8px; }
+  .doc-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 10px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background 0.15s;
+    margin-bottom: 2px;
+  }
+  .doc-item:hover { background: var(--surface2); }
+  .doc-item.active { background: var(--accent-glow); border: 1px solid rgba(99,102,241,0.3); }
+  .doc-icon {
+    width: 30px; height: 30px;
+    background: var(--surface3);
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px;
+    flex-shrink: 0;
+  }
+  .doc-info { flex: 1; min-width: 0; }
+  .doc-name { font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
+  .doc-meta { font-size: 11px; color: var(--text3); margin-top: 1px; }
+  .doc-status {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 99px;
+    font-weight: 500;
+    flex-shrink: 0;
+  }
+  .status-done { background: var(--green-dim); color: var(--green); }
+  .status-processing { background: rgba(245,158,11,0.12); color: var(--amber); }
+  .status-failed { background: var(--red-dim); color: var(--red); }
+
+  .empty-docs {
+    padding: 24px 12px;
+    text-align: center;
+    color: var(--text3);
+    font-size: 12px;
+    line-height: 1.6;
+  }
+
+  /* ── Main panel ── */
+  .main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Chat header ── */
+  .chat-header {
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+    background: var(--surface);
+  }
+  .chat-doc-name { font-size: 14px; font-weight: 500; }
+  .chat-doc-meta { font-size: 12px; color: var(--text2); }
+  .new-session-btn {
+    margin-left: auto;
+    padding: 6px 12px;
+    background: var(--surface3);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius-sm);
+    color: var(--text2);
+    font-size: 12px;
+    cursor: pointer;
+    font-family: var(--sans);
+    transition: all 0.15s;
+  }
+  .new-session-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* ── Welcome screen ── */
+  .welcome {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    color: var(--text3);
+    padding: 40px;
+    text-align: center;
+  }
+  .welcome-icon { font-size: 40px; margin-bottom: 4px; }
+  .welcome h2 { font-size: 18px; font-weight: 500; color: var(--text2); }
+  .welcome p { font-size: 13px; max-width: 320px; line-height: 1.6; }
+
+  /* ── Messages ── */
+  .messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .messages::-webkit-scrollbar { width: 4px; }
+  .messages::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+  .msg { display: flex; gap: 12px; max-width: 780px; }
+  .msg.user { flex-direction: row-reverse; align-self: flex-end; }
+  .msg.assistant { align-self: flex-start; }
+
+  .msg-avatar {
+    width: 28px; height: 28px;
+    border-radius: 7px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .msg.user .msg-avatar { background: var(--accent); }
+  .msg.assistant .msg-avatar { background: var(--surface3); border: 1px solid var(--border2); }
+
+  .msg-bubble {
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: 14px;
+    line-height: 1.6;
+    max-width: 600px;
+  }
+  .msg.user .msg-bubble {
+    background: var(--accent);
+    color: white;
+    border-radius: 10px 2px 10px 10px;
+  }
+  .msg.assistant .msg-bubble {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 2px 10px 10px 10px;
+  }
+
+  .typing {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    padding: 14px;
+  }
+  .typing span {
+    width: 6px; height: 6px;
+    background: var(--text3);
+    border-radius: 50%;
+    animation: bounce 1.2s infinite;
+  }
+  .typing span:nth-child(2) { animation-delay: 0.2s; }
+  .typing span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes bounce {
+    0%, 60%, 100% { transform: translateY(0); }
+    30% { transform: translateY(-6px); }
+  }
+
+  /* ── Input bar ── */
+  .input-bar {
+    padding: 14px 20px;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+  }
+  .input-wrap {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    transition: border-color 0.15s;
+  }
+  .input-wrap:focus-within { border-color: var(--accent); }
+  .input-wrap textarea {
+    flex: 1;
+    background: none;
+    border: none;
+    outline: none;
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    resize: none;
+    line-height: 1.5;
+    max-height: 120px;
+    min-height: 20px;
+  }
+  .input-wrap textarea::placeholder { color: var(--text3); }
+  .send-btn {
+    width: 32px; height: 32px;
+    background: var(--accent);
+    border: none;
+    border-radius: 7px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s;
+    flex-shrink: 0;
+    color: white;
+    font-size: 15px;
+  }
+  .send-btn:hover { background: var(--accent-dim); }
+  .send-btn:disabled { opacity: 0.4; pointer-events: none; }
+  .input-hint { font-size: 11px; color: var(--text3); margin-top: 6px; text-align: center; }
+
+  /* ── Sessions panel ── */
+  .sessions-bar {
+    width: 200px;
+    flex-shrink: 0;
+    border-left: 1px solid var(--border);
+    background: var(--surface);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .sessions-title {
+    padding: 14px 14px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    color: var(--text3);
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
+  }
+  .session-list { flex: 1; overflow-y: auto; padding: 8px; }
+  .session-item {
+    padding: 8px 10px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    margin-bottom: 2px;
+    transition: background 0.15s;
+  }
+  .session-item:hover { background: var(--surface2); }
+  .session-item.active { background: var(--accent-glow); }
+  .session-id { font-size: 11px; font-weight: 500; color: var(--text2); font-family: var(--mono); }
+  .session-preview { font-size: 11px; color: var(--text3); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .session-time { font-size: 10px; color: var(--text3); margin-top: 2px; }
+
+  .empty-sessions {
+    padding: 20px 10px;
+    text-align: center;
+    color: var(--text3);
+    font-size: 11px;
+    line-height: 1.6;
+  }
+
+  /* ── Toast ── */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    padding: 10px 16px;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    font-weight: 500;
+    z-index: 999;
+    opacity: 0;
+    transform: translateY(8px);
+    transition: all 0.2s;
+    pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast.success { background: var(--green-dim); border: 1px solid rgba(16,185,129,0.3); color: var(--green); }
+  .toast.error { background: var(--red-dim); border: 1px solid rgba(239,68,68,0.3); color: var(--red); }
+
+  /* ── Upload progress ── */
+  .progress-bar {
+    height: 2px;
+    background: var(--border);
+    border-radius: 1px;
+    margin: 8px 12px 0;
+    overflow: hidden;
+    display: none;
+  }
+  .progress-bar.visible { display: block; }
+  .progress-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 1px;
+    width: 0%;
+    transition: width 0.3s;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar { width: 3px; }
+  .scrollbar-thin::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<!-- Top bar -->
+<div class="topbar">
+  <div class="logo">
+    <div class="logo-icon">🧠</div>
+    Sujan's App
+  </div>
+  <span style="font-size:12px;color:var(--text3);font-family:var(--mono);">RAG · Django · LangChain</span>
+  <div class="topbar-right">
+    <div class="status-dot" id="apiDot"></div>
+    <span class="status-label" id="apiStatus">Connecting…</span>
+  </div>
+</div>
+
+<div class="app">
+
+  <!-- Left sidebar — documents -->
+  <div class="sidebar">
+    <div class="sidebar-section">Documents</div>
+
+    <div class="upload-zone" id="uploadZone">
+      <div class="icon">📄</div>
+      <p><strong>Click to upload</strong> or drag a file here<br>PDF or TXT supported</p>
+      <input type="file" id="fileInput" accept=".pdf,.txt">
+    </div>
+    <div class="progress-bar" id="progressBar"><div class="progress-fill" id="progressFill"></div></div>
+    <button class="upload-btn" id="uploadBtn">Upload & index document</button>
+
+    <div class="doc-list scrollbar-thin" id="docList">
+      <div class="empty-docs" id="emptyDocs">No documents yet.<br>Upload one to get started.</div>
+    </div>
+  </div>
+
+  <!-- Main chat area -->
+  <div class="main" id="mainPanel">
+
+    <!-- Welcome -->
+    <div class="welcome" id="welcomeScreen">
+      <div class="welcome-icon">💬</div>
+      <h2>Ask your documents anything</h2>
+      <p>Upload a PDF or text file on the left, then start a conversation. Answers come directly from your document — no hallucinations.</p>
+    </div>
+
+    <!-- Chat (hidden until doc selected) -->
+    <div id="chatPanel" style="display:none;flex:1;display:flex;flex-direction:column;overflow:hidden;">
+      <div class="chat-header">
+        <div>
+          <div class="chat-doc-name" id="chatDocName">—</div>
+          <div class="chat-doc-meta" id="chatDocMeta">Select a document to start</div>
+        </div>
+        <button class="new-session-btn" onclick="newSession()">+ New session</button>
+      </div>
+
+      <div class="messages scrollbar-thin" id="messages"></div>
+
+      <div class="input-bar">
+        <div class="input-wrap">
+          <textarea id="questionInput" placeholder="Ask a question about this document…" rows="1" disabled></textarea>
+          <button class="send-btn" id="sendBtn" onclick="sendMessage()" disabled>↑</button>
+        </div>
+        <div class="input-hint">Press Enter to send · Shift+Enter for new line</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Right sidebar — sessions -->
+  <div class="sessions-bar">
+    <div class="sessions-title">Sessions</div>
+    <div class="session-list scrollbar-thin" id="sessionList">
+      <div class="empty-sessions" id="emptySessions">No sessions yet.<br>Start chatting to create one.</div>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = '';  // same origin — Django serves this page
+
+let state = {
+  docs: [],
+  activeDoc: null,
+  activeSession: null,
+  sessions: [],
+  pendingFile: null,
+  isLoading: false,
+};
+
+// ── API helpers ──────────────────────────────────────────────────────────────
+async function apiFetch(path, opts = {}) {
+  const res = await fetch(API + path, opts);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+// ── Toast ────────────────────────────────────────────────────────────────────
+function toast(msg, type = 'success') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `toast ${type} show`;
+  setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+// ── API status ───────────────────────────────────────────────────────────────
+async function checkApi() {
+  try {
+    await fetch(API + '/api/documents/');
+    document.getElementById('apiDot').style.background = 'var(--green)';
+    document.getElementById('apiDot').style.boxShadow = '0 0 6px var(--green)';
+    document.getElementById('apiStatus').textContent = 'API connected';
+  } catch {
+    document.getElementById('apiDot').style.background = 'var(--red)';
+    document.getElementById('apiDot').style.boxShadow = 'none';
+    document.getElementById('apiStatus').textContent = 'API offline';
+  }
+}
+
+// ── Documents ────────────────────────────────────────────────────────────────
+function renderDocs() {
+  const list = document.getElementById('docList');
+  const empty = document.getElementById('emptyDocs');
+  if (state.docs.length === 0) {
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+  list.innerHTML = '';
+  state.docs.forEach(doc => {
+    const el = document.createElement('div');
+    el.className = 'doc-item' + (state.activeDoc?.id === doc.id ? ' active' : '');
+    el.innerHTML = `
+      <div class="doc-icon">${doc.name.endsWith('.pdf') ? '📕' : '📄'}</div>
+      <div class="doc-info">
+        <div class="doc-name">${doc.name}</div>
+        <div class="doc-meta">${new Date(doc.uploaded_at).toLocaleDateString()}</div>
+      </div>
+      <span class="doc-status status-${doc.status}">${doc.status}</span>
+    `;
+    el.onclick = () => selectDoc(doc);
+    list.appendChild(el);
+  });
+}
+
+function selectDoc(doc) {
+  if (doc.status !== 'done') { toast('Document is still processing', 'error'); return; }
+  state.activeDoc = doc;
+  state.activeSession = null;
+  state.sessions = [];
+
+  document.getElementById('welcomeScreen').style.display = 'none';
+  document.getElementById('chatPanel').style.display = 'flex';
+  document.getElementById('chatDocName').textContent = doc.name;
+  document.getElementById('chatDocMeta').textContent = `Document ID: ${doc.id} · Ready to answer questions`;
+  document.getElementById('questionInput').disabled = false;
+  document.getElementById('sendBtn').disabled = false;
+  document.getElementById('messages').innerHTML = '';
+  renderDocs();
+  renderSessions();
+
+  appendSystemMsg(`Document loaded. Ask me anything about **${doc.name}**.`);
+}
+
+// ── Upload ───────────────────────────────────────────────────────────────────
+const uploadZone = document.getElementById('uploadZone');
+const fileInput = document.getElementById('fileInput');
+const uploadBtn = document.getElementById('uploadBtn');
+
+uploadZone.onclick = () => fileInput.click();
+uploadZone.ondragover = e => { e.preventDefault(); uploadZone.classList.add('drag'); };
+uploadZone.ondragleave = () => uploadZone.classList.remove('drag');
+uploadZone.ondrop = e => {
+  e.preventDefault();
+  uploadZone.classList.remove('drag');
+  const f = e.dataTransfer.files[0];
+  if (f) selectFile(f);
+};
+
+fileInput.onchange = () => { if (fileInput.files[0]) selectFile(fileInput.files[0]); };
+
+function selectFile(file) {
+  state.pendingFile = file;
+  uploadZone.querySelector('p').innerHTML = `<strong>${file.name}</strong><br><span style="color:var(--text3);font-size:11px;">${(file.size/1024).toFixed(1)} KB</span>`;
+  uploadBtn.classList.add('visible');
+}
+
+uploadBtn.onclick = async () => {
+  if (!state.pendingFile || state.isLoading) return;
+  state.isLoading = true;
+  uploadBtn.textContent = 'Indexing…';
+  uploadBtn.classList.add('loading');
+
+  const bar = document.getElementById('progressBar');
+  const fill = document.getElementById('progressFill');
+  bar.classList.add('visible');
+  let p = 0;
+  const ticker = setInterval(() => { p = Math.min(p + 8, 85); fill.style.width = p + '%'; }, 300);
+
+  try {
+    const fd = new FormData();
+    fd.append('file', state.pendingFile);
+    const doc = await apiFetch('/api/documents/', { method: 'POST', body: fd });
+    clearInterval(ticker);
+    fill.style.width = '100%';
+    setTimeout(() => bar.classList.remove('visible'), 600);
+
+    state.docs.unshift(doc);
+    renderDocs();
+    toast(`"${doc.name}" indexed successfully`);
+    uploadBtn.classList.remove('visible');
+    uploadZone.querySelector('p').innerHTML = '<strong>Click to upload</strong> or drag a file here<br>PDF or TXT supported';
+    state.pendingFile = null;
+    fileInput.value = '';
+  } catch (e) {
+    clearInterval(ticker);
+    bar.classList.remove('visible');
+    toast(e.message, 'error');
+  }
+
+  state.isLoading = false;
+  uploadBtn.textContent = 'Upload & index document';
+  uploadBtn.classList.remove('loading');
+};
+
+// ── Chat ─────────────────────────────────────────────────────────────────────
+function appendMsg(role, text) {
+  const wrap = document.getElementById('messages');
+  const el = document.createElement('div');
+  el.className = `msg ${role}`;
+  el.innerHTML = `
+    <div class="msg-avatar">${role === 'user' ? '👤' : '🧠'}</div>
+    <div class="msg-bubble">${text.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')}</div>
+  `;
+  wrap.appendChild(el);
+  wrap.scrollTop = wrap.scrollHeight;
+  return el;
+}
+
+function appendSystemMsg(text) {
+  const wrap = document.getElementById('messages');
+  const el = document.createElement('div');
+  el.style.cssText = 'text-align:center;font-size:12px;color:var(--text3);padding:4px 0;';
+  el.textContent = text.replace(/\*\*(.*?)\*\*/g, '$1');
+  wrap.appendChild(el);
+  wrap.scrollTop = wrap.scrollHeight;
+}
+
+function showTyping() {
+  const wrap = document.getElementById('messages');
+  const el = document.createElement('div');
+  el.className = 'msg assistant';
+  el.id = 'typingIndicator';
+  el.innerHTML = `<div class="msg-avatar">🧠</div><div class="msg-bubble"><div class="typing"><span></span><span></span><span></span></div></div>`;
+  wrap.appendChild(el);
+  wrap.scrollTop = wrap.scrollHeight;
+}
+
+function removeTyping() {
+  document.getElementById('typingIndicator')?.remove();
+}
+
+async function sendMessage() {
+  const input = document.getElementById('questionInput');
+  const q = input.value.trim();
+  if (!q || !state.activeDoc || state.isLoading) return;
+
+  input.value = '';
+  input.style.height = 'auto';
+  state.isLoading = true;
+  document.getElementById('sendBtn').disabled = true;
+
+  appendMsg('user', q);
+  showTyping();
+
+  try {
+    const body = { doc_id: state.activeDoc.id, question: q };
+    if (state.activeSession) body.session_id = state.activeSession;
+
+    const res = await apiFetch('/api/chat/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    removeTyping();
+    appendMsg('assistant', res.answer);
+
+    if (!state.activeSession) {
+      state.activeSession = res.session_id;
+      state.sessions.unshift({ id: res.session_id, preview: q, time: new Date() });
+      renderSessions();
+    }
+  } catch (e) {
+    removeTyping();
+    appendMsg('assistant', `Error: ${e.message}`);
+  }
+
+  state.isLoading = false;
+  document.getElementById('sendBtn').disabled = false;
+  input.focus();
+}
+
+function newSession() {
+  state.activeSession = null;
+  document.getElementById('messages').innerHTML = '';
+  appendSystemMsg(`New session started for **${state.activeDoc?.name}**`);
+  renderSessions();
+}
+
+// ── Sessions ─────────────────────────────────────────────────────────────────
+function renderSessions() {
+  const list = document.getElementById('sessionList');
+  const empty = document.getElementById('emptySessions');
+  if (state.sessions.length === 0) {
+    empty.style.display = 'block';
+    list.innerHTML = '';
+    list.appendChild(empty);
+    return;
+  }
+  empty.style.display = 'none';
+  list.innerHTML = '';
+  state.sessions.forEach(s => {
+    const el = document.createElement('div');
+    el.className = 'session-item' + (state.activeSession === s.id ? ' active' : '');
+    el.innerHTML = `
+      <div class="session-id">#${s.id}</div>
+      <div class="session-preview">${s.preview}</div>
+      <div class="session-time">${s.time.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</div>
+    `;
+    el.onclick = () => { state.activeSession = s.id; renderSessions(); };
+    list.appendChild(el);
+  });
+}
+
+// ── Textarea auto-resize + enter to send ─────────────────────────────────────
+const ta = document.getElementById('questionInput');
+ta.addEventListener('input', () => {
+  ta.style.height = 'auto';
+  ta.style.height = Math.min(ta.scrollHeight, 120) + 'px';
+});
+ta.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+});
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+checkApi();
+setInterval(checkApi, 30000);
+</script>
+</body>
+</html>
